@@ -25,49 +25,66 @@ const crawlingByNewsHome = () => {
     });
 }
 
-// crawlingByNewsHome();
+const crawlingByBreakingnews = () => {
+    const category = 'society';
+    // const category = 'politics';
+    // const category = 'economic';
+    // const category = 'foreign';
+    // const category = 'culture';
+    // const category = 'digital';
 
-// 2. 다음 뉴스 홈 html에서 위 코드를 실행한다.
+    for(let day = 1; day <= 20; day++) {
+        for(let page = 1; page <= 5; page++) {
+            console.log(`https://news.daum.net/breakingnews/${category}?page=${page}&regDate=202005${pad(day, 2)}`);
+            request(`https://news.daum.net/breakingnews/${category}?page=${page}&regDate=202005${pad(day, 2)}`, (error, response, body) => {
+                const $ = cheerio.load(body);
+            
+                let aArr;
+                aArr = $('a');
+            
+                let newsArr = [];
+    
+                for(let i = 0; i < aArr.length; i++) {
+                    if(aArr[i].attribs.href.includes("v.daum.net/v/"))
+                    newsArr.push(aArr[i].attribs.href);
+                }
+            
+                newsArr = Array.from(new Set(newsArr));
+            
+                for(let i = 0; i < newsArr.length; i++) {
+                    crawlingNewsByNewsTime(newsArr[i].split('https://v.daum.net/v/')[1], category);
+                }
+            });
+        }
+    }
+}
 
-// 기사 제목 : document.querySelectorAll('.tit_view')[0];
-// 기사 내용 : document.querySelectorAll('#harmonyContainer')[0];
-// 기사 카테고리 : https://api.v.kakao.com/p/346KaedeS2?paths=news,20200511152500711 -> extraInfo.cateInfo.category
+const crawlingNewsByNewsTime = (newsTime, category) => {
+    const newsUrl = `https://news.v.daum.net/v/${newsTime}`;
+    console.log(newsUrl);
+    request(newsUrl, (error, response, body) => {
+        const $ = cheerio.load(body);
+        let title = $('.tit_view')[0].children[0].data;
 
-const crawlingNewsCategory = (newsTime, title, content) => {
-    const newsCategoryUrl = `https://api.v.kakao.com/p/346KaedeS2?paths=news,${newsTime}`;
+        let contentArr = $('#harmonyContainer p');
+        let content = "";
+        for(let i = 0; i < contentArr.length; i++) {
+            if(contentArr[i].children[0] === undefined || contentArr[i].children[0].data === undefined) {
+                console.log(`[CONTINUE] contentArr[i].children[0].data === undefined`);
+                continue;
+            }
+            content += contentArr[i].children[0].data + " ";
+        }
 
-    request(newsCategoryUrl, (error, response, body) => {
-        const parsedBody = JSON.parse(body);
-        let category = parsedBody.extraInfo.cateInfo.category;
         let newsObject = {
             title,
             content,
             category
         }
 
-        // console.log(newsObject);
         globalChannel.sendToQueue(queueName, Buffer.from(JSON.stringify(newsObject)));
     });
 }
-
-const crawlingNewsByNewsTime = (newsTime) => {
-    const newsUrl = `https://news.v.daum.net/v/${newsTime}`;
-    request(newsUrl, (error, response, body) => {
-    const $ = cheerio.load(body);
-    let title = $('.tit_view')[0].children[0].data;
-
-    let contentArr = $('#harmonyContainer p');
-    let content = "";
-    for(let i = 0; i < contentArr.length; i++) {
-        content += contentArr[i].children[0].data + " ";
-    }
-
-    crawlingNewsCategory(newsTime, title, content);
-
-    });
-}
-
-// crawlingNewsByNewsTime('20200511152500711');
 
 let globalChannel;
 
@@ -87,10 +104,12 @@ amqp.connect('amqp://localhost', function(error0, connection) {
         });
         globalChannel = channel;
 
-        crawlingByNewsHome();
+        crawlingByBreakingnews();
     });
-    setTimeout(function() {
-        connection.close();
-        process.exit(0);
-    }, 1000 * 30);
 });
+
+const pad = (n, width, z) => {
+    z = z || '0';
+    n = n + '';
+    return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
+}
